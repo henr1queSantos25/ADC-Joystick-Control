@@ -19,8 +19,8 @@
 #define LED_BLUE 12
 #define LED_RED 13
 #define BUTTON_A 5
-#define DEAD_ZONE 200 // Tamanho da zona morta
-#define SQUARE_SIZE 8 //tamanho do quadrado
+#define DEAD_ZONE 200 // Tamanho da zona morta (JOYSTICK PARADO)
+#define SQUARE_SIZE 8 // tamanho do quadrado
 
 uint slice_led_b, slice_led_r;
 const float DIVIDER_PWM = 16.0;
@@ -28,10 +28,52 @@ const uint16_t PERIOD = 4096;
 bool cor_display = false;
 ssd1306_t ssd;
 
-uint32_t volatile last_time = 0; // variável que auxilia no debounce
-bool volatile borda_display = false;
-bool volatile pwm_ativado = true;
+// VARIÁVEIS VOLÁTEIS
+uint32_t volatile last_time = 0; // Variável que auxilia no debounce
+bool volatile borda_display = false; // Variável que define a borda do display
+bool volatile pwm_ativado = true; // Variável que define se o controle do pwm está ativado ou não
 
+// PROTÓTIPOS
+void setup_I2C();
+void setup_joystick();
+void setup_led_pwm(uint led, uint *slice);
+void setup_button_and_ledGreen();
+void setup_display();
+void setup();
+void gpio_irq_handler(uint gpio, uint32_t events);
+void joystick_read_axis(uint16_t *vrx_value, uint16_t *vry_value);
+void level_pwm(int value_x, int value_y);
+void move_square_with_joystick(ssd1306_t *ssd, uint16_t value_x, uint16_t value_y);
+
+int main()
+{ 
+    uint16_t value_x, value_y; // Variáveis que recebem o valor de x e y do joystick
+    setup(); // Configuração geral
+
+    // CONFIGURAÇÃO DAS INTERRUPÇÕES
+    gpio_set_irq_enabled_with_callback(BUTTON_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
+    gpio_set_irq_enabled_with_callback(SW, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
+    while (true)
+    {
+        joystick_read_axis(&value_x, &value_y); // Recebe a posição do joystick
+
+        if (pwm_ativado)
+            level_pwm(value_x, value_y); // Define o level do PWM
+
+        ssd1306_fill(&ssd, !cor_display); // Limpa o display
+
+        (borda_display) ? ssd1306_rect(&ssd, 5, 5, 118, 54, cor_display, !cor_display) : // Verifica qual borda está definida
+                          ssd1306_rect(&ssd, 1, 1, 126, 62, cor_display, !cor_display);
+
+
+        move_square_with_joystick(&ssd, value_x, value_y); // Define a posição do quadrado no display
+
+        ssd1306_send_data(&ssd); // Atualiza o display
+        sleep_ms(50);
+    }
+}
+
+// ####################################### FUNÇÕES DE SETUP ###################################
 void setup_I2C()
 {
     i2c_init(I2C_PORT, 400 * 1000);
@@ -75,10 +117,10 @@ void setup_button_and_ledGreen()
 void setup_display()
 {
     ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco, I2C_PORT); // Inicializa o display
-    ssd1306_config(&ssd);                                         // Configura o display
-    ssd1306_send_data(&ssd);                                      // Envia os dados para o display
-    ssd1306_fill(&ssd, false);                                    // Limpa o display. O display inicia com todos os pixels apagados.
-    ssd1306_send_data(&ssd);                                      // Atualiza display
+    ssd1306_config(&ssd); // Configura o display
+    ssd1306_send_data(&ssd); // Envia os dados para o display
+    ssd1306_fill(&ssd, false); // Limpa o display. O display inicia com todos os pixels apagados.
+    ssd1306_send_data(&ssd); // Atualiza display
 }
 
 void setup()
@@ -92,6 +134,7 @@ void setup()
     setup_display();
 }
 
+// ####################################### FUNÇÃO DE CALLBACK CHAMADA NAS INTERRUPÇÕES ###################################
 void gpio_irq_handler(uint gpio, uint32_t events)
 {
     // Obtém o tempo atual em microssegundos para debounce
@@ -100,12 +143,13 @@ void gpio_irq_handler(uint gpio, uint32_t events)
     // Verifica se o tempo mínimo de debounce passou (300ms)
     if (current_time - last_time > 300000)
     {
-        if (gpio == SW)
+        if (gpio == SW) // Alterna o estado do lede verde e muda o desenho da borda do display
         {
             gpio_put(LED_GREEN, !gpio_get(LED_GREEN));
             borda_display = !borda_display;
         }
-        if(gpio == BUTTON_A){
+        if (gpio == BUTTON_A) // Define se o pwm dos leds está ativado ou desativado
+        {
             pwm_ativado = !pwm_ativado;
         }
 
@@ -113,20 +157,21 @@ void gpio_irq_handler(uint gpio, uint32_t events)
     }
 }
 
-// Função para ler os valores dos eixos do joystick (X e Y)
+// ####################################### FUNÇÃO PARA LER OS VALORES DOS EIXOS DO JOYSTICK (X E Y) ###################################
 void joystick_read_axis(uint16_t *vrx_value, uint16_t *vry_value)
 {
     // Leitura do valor do eixo X do joystick
     adc_select_input(ADC_CHANNEL_1); // Seleciona o canal ADC para o eixo X
-    sleep_us(2);                     // Pequeno delay para estabilidade
-    *vrx_value = adc_read();         // Lê o valor do eixo X (0-4095)
+    sleep_us(2); // Pequeno delay para estabilidade
+    *vrx_value = adc_read(); // Lê o valor do eixo X (0-4095)
 
     // Leitura do valor do eixo Y do joystick
     adc_select_input(ADC_CHANNEL_0); // Seleciona o canal ADC para o eixo Y
-    sleep_us(2);                     // Pequeno delay para estabilidade
-    *vry_value = adc_read();         // Lê o valor do eixo Y (0-4095)
+    sleep_us(2); // Pequeno delay para estabilidade
+    *vry_value = adc_read(); // Lê o valor do eixo Y (0-4095)
 }
 
+// ####################################### FUNÇÃO PARA CONTROLAR O NÍVEL DO PWM DOS LEDS COM O JOYSTICK ###################################
 void level_pwm(int value_x, int value_y)
 {
     int offset_x = value_x - 2048;
@@ -147,7 +192,9 @@ void level_pwm(int value_x, int value_y)
     pwm_set_gpio_level(LED_BLUE, pwm_y);
 }
 
-void move_square_with_joystick(ssd1306_t *ssd, uint16_t value_x, uint16_t value_y) {
+// ####################################### FUNÇÃO PARA CONTROLAR O QUADRADO 8X8 DO DISPLAY ###################################
+void move_square_with_joystick(ssd1306_t *ssd, uint16_t value_x, uint16_t value_y)
+{
 
     // Mapear os valores do joystick para as coordenadas do display
     int square_x = (value_x * (WIDTH - SQUARE_SIZE)) / PERIOD;
@@ -155,31 +202,4 @@ void move_square_with_joystick(ssd1306_t *ssd, uint16_t value_x, uint16_t value_
 
     // Desenhar o quadrado na nova posição
     draw_filled_square(ssd, square_x, square_y);
-}
-
-int main()
-{
-    uint16_t value_x, value_y;
-    setup();
-
-    gpio_set_irq_enabled_with_callback(BUTTON_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
-    gpio_set_irq_enabled_with_callback(SW, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
-    while (true)
-    {
-        joystick_read_axis(&value_x, &value_y);
-
-        printf("valor x: %d\tvalor y; %d\n", value_x, value_y);
-
-        if(pwm_ativado) level_pwm(value_x, value_y);
-
-
-        ssd1306_fill(&ssd, !cor_display); // Limpa o display
-        (borda_display) ? ssd1306_rect(&ssd, 5, 5, 118, 54, cor_display, !cor_display) : 
-                          ssd1306_rect(&ssd, 1, 1, 126, 62, cor_display, !cor_display);
-        move_square_with_joystick(&ssd, value_x, value_y);
-        
-
-        ssd1306_send_data(&ssd); // Atualiza o display
-        sleep_ms(50);
-    }
 }
