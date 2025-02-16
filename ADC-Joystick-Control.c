@@ -20,7 +20,7 @@
 #define LED_RED 13
 #define BUTTON_A 5
 #define DEAD_ZONE 200 // Tamanho da zona morta (JOYSTICK PARADO)
-#define SQUARE_SIZE 8 // tamanho do quadrado
+#define tamanho_quadrado 8 // tamanho do quadrado
 
 uint slice_led_b, slice_led_r;
 const float DIVIDER_PWM = 16.0;
@@ -41,9 +41,9 @@ void setup_button_and_ledGreen();
 void setup_display();
 void setup();
 void gpio_irq_handler(uint gpio, uint32_t events);
-void joystick_read_axis(uint16_t *vrx_value, uint16_t *vry_value);
+void posicao_joystick(uint16_t *vrx_value, uint16_t *vry_value);
 void level_pwm(int value_x, int value_y);
-void move_square_with_joystick(ssd1306_t *ssd, uint16_t value_x, uint16_t value_y);
+void mover_quadrado(ssd1306_t *ssd, uint16_t value_x, uint16_t value_y);
 
 int main()
 { 
@@ -55,7 +55,7 @@ int main()
     gpio_set_irq_enabled_with_callback(SW, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
     while (true)
     {
-        joystick_read_axis(&value_x, &value_y); // Recebe a posição do joystick
+        posicao_joystick(&value_x, &value_y); // Recebe a posição do joystick
 
         if (pwm_ativado)
             level_pwm(value_x, value_y); // Define o level do PWM
@@ -66,7 +66,7 @@ int main()
                           ssd1306_rect(&ssd, 1, 1, 126, 62, cor_display, !cor_display);
 
 
-        move_square_with_joystick(&ssd, value_x, value_y); // Define a posição do quadrado no display
+        mover_quadrado(&ssd, value_x, value_y); // Define a posição do quadrado no display
 
         ssd1306_send_data(&ssd); // Atualiza o display
         sleep_ms(50);
@@ -158,17 +158,17 @@ void gpio_irq_handler(uint gpio, uint32_t events)
 }
 
 // ####################################### FUNÇÃO PARA LER OS VALORES DOS EIXOS DO JOYSTICK (X E Y) ###################################
-void joystick_read_axis(uint16_t *vrx_value, uint16_t *vry_value)
+void posicao_joystick(uint16_t *value_x, uint16_t *value_y)
 {
     // Leitura do valor do eixo X do joystick
     adc_select_input(ADC_CHANNEL_1); // Seleciona o canal ADC para o eixo X
     sleep_us(2); // Pequeno delay para estabilidade
-    *vrx_value = adc_read(); // Lê o valor do eixo X (0-4095)
+    *value_x = adc_read(); // Lê o valor do eixo X (0-4095)
 
     // Leitura do valor do eixo Y do joystick
     adc_select_input(ADC_CHANNEL_0); // Seleciona o canal ADC para o eixo Y
     sleep_us(2); // Pequeno delay para estabilidade
-    *vry_value = adc_read(); // Lê o valor do eixo Y (0-4095)
+    *value_y = adc_read(); // Lê o valor do eixo Y (0-4095)
 }
 
 // ####################################### FUNÇÃO PARA CONTROLAR O NÍVEL DO PWM DOS LEDS COM O JOYSTICK ###################################
@@ -193,13 +193,13 @@ void level_pwm(int value_x, int value_y)
 }
 
 // ####################################### FUNÇÃO PARA CONTROLAR O QUADRADO 8X8 DO DISPLAY ###################################
-void move_square_with_joystick(ssd1306_t *ssd, uint16_t value_x, uint16_t value_y)
+void mover_quadrado(ssd1306_t *ssd, uint16_t value_x, uint16_t value_y)
 {
 
     // Mapear os valores do joystick para as coordenadas do display
-    int square_x = (value_x * (WIDTH - SQUARE_SIZE)) / PERIOD;
-    int square_y = ((PERIOD - value_y) * (HEIGHT - SQUARE_SIZE)) / PERIOD; // Inverte o eixo Y
+    int posicao_x = (value_x * (WIDTH - tamanho_quadrado)) / PERIOD;
+    int posicao_y = ((PERIOD - value_y) * (HEIGHT - tamanho_quadrado)) / PERIOD; // Inverte o eixo Y
 
     // Desenhar o quadrado na nova posição
-    draw_filled_square(ssd, square_x, square_y);
+    draw_filled_square(ssd, posicao_x, posicao_y);
 }
