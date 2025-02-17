@@ -87,7 +87,7 @@ O **display SSD1306** é utilizado para:
 
 ## 📹 Demonstração do Projeto  
 
-- **[Ver Vídeo](#)**   
+- **[Ver Vídeo](https://drive.google.com/file/d/1WrIPdRHH7Z6uXoRegfM1AfwvYCIisr1k/view?usp=sharing)**   
 
 ---
 
